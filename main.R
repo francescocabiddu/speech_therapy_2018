@@ -5,6 +5,8 @@ lib <- c("magrittr", "tidyverse",
 lapply(lib, require, character.only = TRUE)
 rm(lib)
 
+# seq2_5 is not converted properly and the dfs are not updated in wordspace
+
 #### convert reference dfs ####
 # convert mot_tokens and chi_tokens "UU" to "AH" and recalculate phoneme frames
 mot_tokens_converted <- mot_tokens %>%
@@ -234,7 +236,8 @@ mc_nouns <- extract_gram_types(chi_uni_cat, "N") %>%
   seq2_5() %>%
   .[!duplicated(.$phon),] %>%
   arrange(phon) %>%
-  select(-id, -section, -cat, -word) 
+  select(-id, -section, -cat, -word) %>%
+  mutate(seq2 = sapply(seq2, unique))
 
 mc_nouns %<>%
   add_frame_n_words("seq3", "3_frames", "3_frame_words") %>%
@@ -267,11 +270,13 @@ cpwd_tokens <- lapply(1:nrow(cpwd_types), function(i) {
 
 cpwd_types %<>%
   filter(str_detect(phon, "_")) %>%
-  seq2_5() 
+  seq2_5() %>%
+  mutate(seq2 = sapply(seq2, unique))
 
 cpwd_tokens %<>%
   filter(str_detect(phon, "_")) %>%
-  seq2_5() 
+  seq2_5() %>%
+  mutate(seq2 = sapply(seq2, unique))
 
 cpwd_types %<>%
   add_frame_n_words("seq3", "3_frames", "3_frame_words", temp_df = "cpwd") %>%
