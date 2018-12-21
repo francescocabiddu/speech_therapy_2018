@@ -661,5 +661,333 @@ summary_mc %<>%
          avg_tot_len_frame, sd_tot_len_frame)
 
 write_csv(summary_mc, "summary_mc.csv")
-rm(prova_mc_words)
+rm(prova_mc_words, mc_words)
 
+
+#### summary_table CPWD ####
+cpwd_words <- cpwd_tokens$phon
+
+prova_cpwd_words <- tibble(words = cpwd_words)
+
+summary_cpwd <- mc_cpwd %>%
+  select(target = phon) %>%
+  mutate(len_target = str_split(target, "_") %>% 
+           sapply(function(x) {
+             x %>% 
+               length()
+           }) %>%
+           round(2)) %>%
+  filter(len_target >= 3)
+
+summary_cpwd %<>%
+  mutate(phon = target) %>%
+  seq2_5() %>% 
+  select(target:len_target, seq3:seq5) %>%
+  mutate(seq3 = sapply(seq3, unique)) %>%
+  mutate(seq4 = sapply(seq4, unique)) %>%
+  mutate(seq5 = sapply(seq5, unique)) %>%
+  (function(x) {
+    for (i in 1:nrow(x)) {
+      x$seq[[i]] <- c(x$seq3[[i]], x$seq4[[i]], x$seq5[[i]])
+    }
+    x
+  }) %>%
+  select(-(seq3:seq5)) %>%
+  mutate(seq = sapply(seq, function(x) {
+    if (length(x) == 0) {
+      list(NA)
+    } else {
+      x
+    }
+  })) %>%
+  apply(1, function(x) {
+    tibble(target = x$target,
+           len_target = x$len_target,
+           seq = x$seq)
+  }) %>%
+  rbindlist() 
+
+summary_cpwd %<>%
+  mutate(seq = unlist(seq)) %>%
+  mutate(phon = target) %>%
+  inner_join(., mc_cpwd, by = "phon") %>%
+  select(target:seq, `3_frame_words_cpwd`, `4_frame_words_cpwd`, `5_frame_words_cpwd`) %>%
+  unite(other, 
+        `3_frame_words_cpwd`, 
+        `4_frame_words_cpwd`, 
+        `5_frame_words_cpwd`, sep = " | ") %>%
+  (function(x) {
+    for (i in 1:nrow(x)) {
+      x$shared[i] <- str_detect(x$other[i], x$seq[i]) 
+    }
+    x
+  }) %>%
+  filter(shared == TRUE) %>%
+  select(target, len_target) %>%
+  .[!duplicated(.$target),] 
+
+summary_cpwd %<>%
+  mutate(n_target = n()) %>%
+  select(target, n_target, len_target) %>%
+  mutate(avg_tot_len_target = mean(len_target, na.rm = TRUE) %>% round(2),
+         sd_tot_len_target = sd(len_target, na.rm = TRUE) %>% round(2),
+         freq_target = target %>%
+           sapply(function(x) {
+             fmatch(cpwd_words, x) %>% sum(na.rm=TRUE)
+           })) %>%
+  mutate(freq_target = round((freq_target*1000000) / length(cpwd_words), 2)) %>%
+  mutate(avg_tot_freq_target = mean(freq_target, na.rm = TRUE) %>% round(2),
+         sd_tot_freq_target = sd(freq_target, na.rm = TRUE) %>% round(2)) 
+
+summary_cpwd %<>%
+  mutate(phon = target) %>%
+  seq2_5() %>% 
+  select(target:sd_tot_freq_target, seq3:seq5) %>%
+  mutate(seq3 = sapply(seq3, unique)) %>%
+  mutate(seq4 = sapply(seq4, unique)) %>%
+  mutate(seq5 = sapply(seq5, unique)) %>%
+  (function(x) {
+    for (i in 1:nrow(x)) {
+      x$seq[[i]] <- c(x$seq3[[i]], x$seq4[[i]], x$seq5[[i]])
+    }
+    x
+  }) %>%
+  select(-(seq3:seq5)) %>%
+  mutate(seq = sapply(seq, function(x) {
+    if (length(x) == 0) {
+      list(NA)
+    } else {
+      x
+    }
+  })) %>%
+  apply(1, function(x) {
+    tibble(target = x$target,
+           n_target = x$n_target,
+           len_target = x$len_target,
+           avg_tot_len_target = x$avg_tot_len_target,
+           sd_tot_len_target = x$sd_tot_len_target,
+           freq_target = x$freq_target,
+           avg_tot_freq_target = x$avg_tot_freq_target,
+           sd_tot_freq_target = x$sd_tot_freq_target,
+           seq = x$seq)
+  }) %>%
+  rbindlist() 
+
+summary_cpwd %<>%
+  mutate(seq = unlist(seq)) %>%
+  mutate(phon = target) %>%
+  inner_join(., mc_cpwd, by = "phon") %>%
+  select(target:seq, `3_frame_words_cpwd`, `4_frame_words_cpwd`, `5_frame_words_cpwd`) %>%
+  unite(other, 
+        `3_frame_words_cpwd`, 
+        `4_frame_words_cpwd`, 
+        `5_frame_words_cpwd`, sep = " | ")
+
+summary_cpwd %<>%
+  rename(frame = seq) %>%
+  select(other, target:frame) %>%
+  group_by(target) %>%
+  mutate(n_frame = c(n())) %>%
+  ungroup() 
+
+summary_cpwd %<>%
+  (function(x) {
+    reference <- x %>%
+      select(target, n_frame) %>%
+      group_by(target) %>%
+      filter(row_number()==1) %>%
+      ungroup() %>%
+      mutate(avg_tot_n_frame = round(mean(n_frame, na.rm = TRUE), 2),
+             sd_tot_n_frame = round(sd(n_frame, na.rm = TRUE), 2))
+    
+    x %>%
+      inner_join(., reference, by = c("target", "n_frame"))
+  }) 
+
+summary_cpwd %<>%
+  mutate(len_frame = str_split(frame, "_") %>% 
+           sapply(function(x) {
+             x %>% 
+               length()
+           })) %>%
+  group_by(target) %>%
+  mutate(avg_len_frame = round(mean(len_frame, na.rm = TRUE), 2),
+         sd_len_frame = round(sd(len_frame, na.rm = TRUE), 2)) %>%
+  ungroup() %>%
+  mutate(other = str_split(other, " \\| ") %>%
+           lapply(unique)) %>%
+  (function(x) {
+    for (i in 1:nrow(x)) {
+      x$other[[i]] <- x$other[[i]][str_detect(x$other[[i]], x$frame[i])] %>% sort()
+    } 
+    x
+  }) 
+
+summary_cpwd %<>%
+  (function(x) {
+    reference <- x %>%
+      select(target, avg_len_frame) %>%
+      group_by(target) %>%
+      filter(row_number()==1) %>%
+      ungroup() %>%
+      mutate(avg_tot_len_frame = round(mean(avg_len_frame, na.rm = TRUE), 2),
+             sd_tot_len_frame = round(sd(avg_len_frame, na.rm = TRUE), 2))
+    
+    x %>%
+      inner_join(., reference, by = c("target", "avg_len_frame"))
+  })
+
+# freq_frame 
+summary_cpwd %<>%
+  rowwise() %>%
+  mutate(freq_frame = cpwd_words[which(cpwd_words %in% other)] %>% 
+           length() %>%
+           {((.*1000000) / length(cpwd_words)) %>%
+               round(2)}) %>%
+  ungroup() %>%
+  group_by(target) %>%
+  mutate(avg_freq_frame = mean(freq_frame) %>% round(2),
+         sd_freq_frame = sd(freq_frame) %>% round(2)) %>%
+  ungroup() 
+
+summary_cpwd %<>%
+  (function(x) {
+    reference <- x %>%
+      select(target, avg_freq_frame) %>%
+      group_by(target) %>%
+      filter(row_number()==1) %>%
+      ungroup() %>%
+      mutate(avg_tot_freq_frame = round(mean(avg_freq_frame, na.rm = TRUE), 2),
+             sd_tot_freq_frame = round(sd(avg_freq_frame, na.rm = TRUE), 2))
+    
+    x %>%
+      inner_join(., reference, by = c("target", "avg_freq_frame"))
+  })
+
+summary_cpwd %<>%
+  apply(1, function(x) {
+    tibble(target = x$target,
+           n_target = x$n_target,
+           len_target = x$len_target,
+           avg_tot_len_target = x$avg_tot_len_target,
+           sd_tot_len_target = x$sd_tot_len_target,
+           freq_target = x$freq_target,
+           avg_tot_freq_target = x$avg_tot_freq_target,
+           sd_tot_freq_target = x$sd_tot_freq_target,
+           frame = x$frame,
+           n_frame = x$n_frame,
+           avg_tot_n_frame = x$avg_tot_n_frame,
+           sd_tot_n_frame = x$sd_tot_n_frame,
+           len_frame = x$len_frame,
+           avg_len_frame = x$avg_len_frame,
+           sd_len_frame = x$sd_len_frame,
+           avg_tot_len_frame = x$avg_tot_len_frame,
+           sd_tot_len_frame = x$sd_tot_len_frame,
+           freq_frame = x$freq_frame,
+           avg_freq_frame = x$avg_freq_frame,
+           sd_freq_frame = x$sd_freq_frame,
+           avg_tot_freq_frame = x$avg_tot_freq_frame,
+           sd_tot_freq_frame = x$sd_tot_freq_frame,
+           other = unlist(x$other))
+  }) %>%
+  rbindlist()
+
+# freq_other
+summary_cpwd %<>%
+  group_by(target, frame) %>%
+  mutate(n_other = n()) %>%
+  ungroup() 
+
+summary_cpwd %<>%
+  (function(x) {
+    reference <- summary_cpwd %>%
+      select(target, frame, n_other) %>%
+      group_by(target, frame) %>%
+      filter(row_number() == 1) %>%
+      ungroup() %>%
+      group_by(target) %>%
+      summarise(avg_n_other = mean(n_other, na.rm = TRUE) %>% round(2),
+                sd_n_other = sd(n_other, na.rm = TRUE) %>% round(2)) %>%
+      ungroup()
+    
+    x %>%
+      inner_join(., reference, by = "target")
+  })
+
+summary_cpwd %<>%
+  (function(x) {
+    reference <- x %>%
+      select(target, avg_n_other) %>%
+      group_by(target) %>%
+      filter(row_number()==1) %>%
+      ungroup() %>%
+      mutate(avg_tot_n_other = round(mean(avg_n_other, na.rm = TRUE), 2),
+             sd_tot_n_other = round(sd(avg_n_other, na.rm = TRUE), 2))
+    
+    x %>%
+      inner_join(., reference, by = c("target", "avg_n_other"))
+  })
+
+summary_cpwd %<>%
+  (function(x) {
+    reference <- x %>%
+      select(other) %>%
+      distinct(other) %>%
+      mutate(freq_other = other %>%
+               sapply(function(y) {
+                 fmatch(cpwd_words, y) %>% sum(na.rm=TRUE)
+               }))
+    
+    x %>%
+      inner_join(., reference, by = "other")
+  }) %>%
+  mutate(freq_other = ((freq_other*1000000) / length(cpwd_words)) %>%
+           round(2)) 
+
+summary_cpwd %<>%
+  (function(x) {
+    reference <- x %>%
+      select(target, frame, freq_other) %>%
+      group_by(target, frame) %>%
+      summarise(m_freq_other = mean(freq_other, na.rm = TRUE) %>% round(2)) %>%
+      ungroup() %>%
+      group_by(target) %>%
+      summarise(avg_freq_other = mean(m_freq_other, na.rm = TRUE) %>% round(2),
+                sd_freq_other = sd(m_freq_other, na.rm = TRUE) %>% round(2))
+    
+    x %>%
+      inner_join(., reference, by = "target")
+  })
+
+summary_cpwd %<>%
+  (function(x) {
+    reference <- x %>%
+      select(target, avg_freq_other) %>%
+      group_by(target, avg_freq_other) %>%
+      filter(row_number() == 1) %>%
+      ungroup() %>%
+      mutate(avg_tot_freq_other = mean(avg_freq_other, na.rm = TRUE) %>% round(2),
+             sd_tot_freq_other = sd(avg_freq_other, na.rm = TRUE) %>% round(2)) 
+    
+    x %>%
+      inner_join(., reference, by = c("target", "avg_freq_other"))
+  })
+
+summary_cpwd %<>%
+  select(target, freq_target, frame, freq_frame, other, freq_other,
+         n_target, n_frame, n_other,
+         len_target, len_frame,
+         avg_tot_freq_target, sd_tot_freq_target,
+         avg_freq_frame, sd_freq_frame,
+         avg_tot_freq_frame, sd_tot_freq_frame,
+         avg_freq_other, sd_freq_other,
+         avg_tot_freq_other, sd_tot_freq_other,
+         avg_tot_n_frame, sd_tot_n_frame,
+         avg_n_other, sd_n_other,
+         avg_tot_n_other, sd_tot_n_other,
+         avg_tot_len_target, sd_tot_len_target,
+         avg_len_frame, sd_len_frame,
+         avg_tot_len_frame, sd_tot_len_frame)
+
+write_csv(summary_cpwd, "summary_cpwd.csv")
+rm(prova_cpwd_words, cpwd_words)
